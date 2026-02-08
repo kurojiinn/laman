@@ -43,6 +43,7 @@ struct CreateOrderRequest: Codable {
     let deliveryAddress: String
     let comment: String?
     let paymentMethod: PaymentMethod
+    let storeId: UUID
     let items: [CreateOrderItem]
 }
 

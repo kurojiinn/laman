@@ -34,8 +34,17 @@ struct CartView: View {
                                             .foregroundStyle(.secondary)
                                     }
                                     Spacer()
-                                    Text(priceText(Double(item.quantity) * item.product.price))
-                                        .foregroundStyle(priceColor)
+                                    VStack(alignment: .trailing, spacing: 6) {
+                                        Text(priceText(Double(item.quantity) * item.product.price))
+                                            .foregroundStyle(priceColor)
+                                        Button(role: .destructive) {
+                                            appState.removeProduct(item.product)
+                                        } label: {
+                                            Label("Удалить", systemImage: "trash")
+                                                .labelStyle(.iconOnly)
+                                        }
+                                        .buttonStyle(.borderless)
+                                    }
                                 }
                                 .swipeActions(edge: .trailing) {
                                     Button(role: .destructive) {
@@ -118,6 +127,7 @@ struct CartView: View {
                 }
                 .disabled(appState.totalItems == 0)
                 .padding(.horizontal)
+                .padding(.bottom, 16)
             }
         }
         .navigationTitle("Корзина")
@@ -137,6 +147,9 @@ struct CartView: View {
 }
 
 #Preview {
+    let appState = CartViewModel()
     NavigationStack { CartView() }
-        .environmentObject(AppState())
+        .environmentObject(appState)
+        .environmentObject(CatalogViewModel(appState: appState))
+        .environmentObject(StoresViewModel())
 }

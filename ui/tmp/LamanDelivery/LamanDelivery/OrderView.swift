@@ -150,6 +150,7 @@ struct OrderView: View {
             deliveryAddress: deliveryAddress,
             comment: comment.isEmpty ? nil : comment,
             paymentMethod: paymentMethod,
+            storeId: appState.cartItems.first?.product.storeId ?? UUID(),
             items: items
         )
 
@@ -171,6 +172,9 @@ struct OrderView: View {
 }
 
 #Preview {
+    let appState = CartViewModel()
     NavigationStack { OrderView() }
-        .environmentObject(AppState())
+        .environmentObject(appState)
+        .environmentObject(CatalogViewModel(appState: appState))
+        .environmentObject(StoresViewModel())
 }

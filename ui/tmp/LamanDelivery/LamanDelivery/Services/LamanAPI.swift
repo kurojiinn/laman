@@ -40,6 +40,51 @@ final class LamanAPI {
         return try await fetch(url: url, responseType: [Subcategory].self)
     }
 
+    func getStores(categoryType: StoreCategoryType?, search: String?) async throws -> [Store] {
+        var components = URLComponents(url: baseURL.appendingPathComponent("api/v1/stores"), resolvingAgainstBaseURL: false)
+        var queryItems: [URLQueryItem] = []
+        if let categoryType {
+            queryItems.append(URLQueryItem(name: "category_type", value: categoryType.rawValue))
+        }
+        if let search, !search.isEmpty {
+            queryItems.append(URLQueryItem(name: "search", value: search))
+        }
+        if !queryItems.isEmpty {
+            components?.queryItems = queryItems
+        }
+        guard let url = components?.url else { throw LamanAPIError.invalidURL }
+        return try await fetch(url: url, responseType: [Store].self)
+    }
+
+    func getStore(id: UUID) async throws -> Store {
+        let url = baseURL.appendingPathComponent("api/v1/stores").appendingPathComponent(id.uuidString)
+        return try await fetch(url: url, responseType: Store.self)
+    }
+
+    func getStoreProducts(storeId: UUID, subcategoryId: UUID?, search: String?, availableOnly: Bool = true) async throws -> [Product] {
+        var components = URLComponents(url: baseURL.appendingPathComponent("api/v1/stores").appendingPathComponent(storeId.uuidString).appendingPathComponent("products"), resolvingAgainstBaseURL: false)
+        var queryItems: [URLQueryItem] = [
+            URLQueryItem(name: "available_only", value: availableOnly ? "true" : "false")
+        ]
+        if let subcategoryId {
+            queryItems.append(URLQueryItem(name: "subcategory_id", value: subcategoryId.uuidString))
+        }
+        if let search, !search.isEmpty {
+            queryItems.append(URLQueryItem(name: "search", value: search))
+        }
+        components?.queryItems = queryItems
+        guard let url = components?.url else { throw LamanAPIError.invalidURL }
+        return try await fetch(url: url, responseType: [Product].self)
+    }
+
+    func getStoreSubcategories(storeId: UUID) async throws -> [Subcategory] {
+        let url = baseURL
+            .appendingPathComponent("api/v1/stores")
+            .appendingPathComponent(storeId.uuidString)
+            .appendingPathComponent("subcategories")
+        return try await fetch(url: url, responseType: [Subcategory].self)
+    }
+
     func createOrder(request: CreateOrderRequest) async throws -> Order {
         let url = baseURL.appendingPathComponent("api/v1/orders")
         var req = URLRequest(url: url)

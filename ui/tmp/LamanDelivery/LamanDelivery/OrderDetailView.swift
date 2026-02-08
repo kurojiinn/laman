@@ -158,7 +158,7 @@ struct OrderDetailView: View {
 }
 
 #Preview {
-    let appState = AppState()
+    let appState = CartViewModel()
     let sample = Order(
         id: UUID(),
         guestName: "Ахмед Хаджиев",
@@ -176,4 +176,6 @@ struct OrderDetailView: View {
     )
     NavigationStack { OrderDetailView(order: sample) }
         .environmentObject(appState)
+        .environmentObject(CatalogViewModel(appState: appState))
+        .environmentObject(StoresViewModel())
 }

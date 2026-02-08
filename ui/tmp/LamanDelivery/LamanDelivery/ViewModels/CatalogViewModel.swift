@@ -82,10 +82,12 @@ final class CatalogViewModel: ObservableObject {
         isLoading = true
         errorMessage = nil
         do {
+            let effectiveSearch = search ?? (searchText.isEmpty ? nil : searchText)
+            let shouldIgnoreCategory = !(effectiveSearch?.isEmpty ?? true)
             products = try await api.getProducts(
-                categoryId: selectedCategoryId,
-                subcategoryId: selectedSubcategoryId,
-                search: search ?? (searchText.isEmpty ? nil : searchText)
+                categoryId: shouldIgnoreCategory ? nil : selectedCategoryId,
+                subcategoryId: shouldIgnoreCategory ? nil : selectedSubcategoryId,
+                search: effectiveSearch
             )
             appState.mergeProducts(products)
         } catch {

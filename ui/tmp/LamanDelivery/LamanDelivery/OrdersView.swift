@@ -66,6 +66,9 @@ struct OrdersView: View {
 }
 
 #Preview {
+    let appState = CartViewModel()
     NavigationStack { OrdersView() }
-        .environmentObject(AppState())
+        .environmentObject(appState)
+        .environmentObject(CatalogViewModel(appState: appState))
+        .environmentObject(StoresViewModel())
 }
