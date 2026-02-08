@@ -1,9 +1,12 @@
 package catalog
 
 import (
+	"net/http"
+
+	"Laman/internal/models"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"net/http"
 )
 
 // Handler обрабатывает HTTP запросы для каталога.
@@ -26,6 +29,14 @@ func (h *Handler) RegisterRoutes(router *gin.RouterGroup) {
 		catalog.GET("/subcategories", h.GetSubcategories)
 		catalog.GET("/products", h.GetProducts)
 		catalog.GET("/products/:id", h.GetProduct)
+	}
+
+	stores := router.Group("/stores")
+	{
+		stores.GET("", h.GetStores)
+		stores.GET("/:id", h.GetStore)
+		stores.GET("/:id/subcategories", h.GetStoreSubcategories)
+		stores.GET("/:id/products", h.GetStoreProducts)
 	}
 }
 
@@ -110,4 +121,91 @@ func (h *Handler) GetProduct(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, product)
+}
+
+// GetStores обрабатывает GET /stores
+func (h *Handler) GetStores(c *gin.Context) {
+	var categoryType *models.StoreCategoryType
+	if typeStr := c.Query("category_type"); typeStr != "" {
+		ct := models.StoreCategoryType(typeStr)
+		categoryType = &ct
+	}
+
+	var search *string
+	if searchStr := c.Query("search"); searchStr != "" {
+		search = &searchStr
+	}
+
+	stores, err := h.catalogService.GetStores(c.Request.Context(), categoryType, search)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, stores)
+}
+
+// GetStore обрабатывает GET /stores/:id
+func (h *Handler) GetStore(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "неверный ID магазина"})
+		return
+	}
+
+	store, err := h.catalogService.GetStore(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, store)
+}
+
+// GetStoreSubcategories обрабатывает GET /stores/:id/subcategories
+func (h *Handler) GetStoreSubcategories(c *gin.Context) {
+	storeID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "неверный ID магазина"})
+		return
+	}
+
+	subcategories, err := h.catalogService.GetStoreSubcategories(c.Request.Context(), storeID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, subcategories)
+}
+
+// GetStoreProducts обрабатывает GET /stores/:id/products
+func (h *Handler) GetStoreProducts(c *gin.Context) {
+	storeID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "неверный ID магазина"})
+		return
+	}
+
+	var subcategoryID *uuid.UUID
+	if subIDStr := c.Query("subcategory_id"); subIDStr != "" {
+		if subID, err := uuid.Parse(subIDStr); err == nil {
+			subcategoryID = &subID
+		}
+	}
+
+	var search *string
+	if searchStr := c.Query("search"); searchStr != "" {
+		search = &searchStr
+	}
+
+	availableOnly := c.Query("available_only") == "true"
+
+	products, err := h.catalogService.GetStoreProducts(c.Request.Context(), storeID, subcategoryID, search, availableOnly)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, products)
 }

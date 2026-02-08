@@ -57,6 +57,19 @@ func (r *postgresSubcategoryRepository) GetByCategoryID(ctx context.Context, cat
 	return subcategories, err
 }
 
+func (r *postgresSubcategoryRepository) GetByStoreID(ctx context.Context, storeID uuid.UUID) ([]models.Subcategory, error) {
+	var subcategories []models.Subcategory
+	query := `
+SELECT DISTINCT s.id, s.category_id, s.name, s.created_at, s.updated_at
+FROM subcategories s
+JOIN products p ON p.subcategory_id = s.id
+WHERE p.store_id = $1
+ORDER BY s.name
+`
+	err := r.db.SelectContext(ctx, &subcategories, query, storeID)
+	return subcategories, err
+}
+
 // postgresProductRepository реализует ProductRepository используя PostgreSQL.
 type postgresProductRepository struct {
 	db *database.DB
@@ -78,6 +91,36 @@ func (r *postgresProductRepository) GetAll(ctx context.Context, categoryID *uuid
 		args = append(args, *categoryID)
 		argPos++
 	}
+
+	if subcategoryID != nil {
+		query += fmt.Sprintf(" AND subcategory_id = $%d", argPos)
+		args = append(args, *subcategoryID)
+		argPos++
+	}
+
+	if search != nil && *search != "" {
+		query += fmt.Sprintf(" AND (name ILIKE $%d OR COALESCE(description, '') ILIKE $%d)", argPos, argPos)
+		args = append(args, "%"+*search+"%")
+		argPos++
+	}
+
+	if availableOnly {
+		query += fmt.Sprintf(" AND is_available = $%d", argPos)
+		args = append(args, true)
+		argPos++
+	}
+
+	query += " ORDER BY name"
+
+	err := r.db.SelectContext(ctx, &products, query, args...)
+	return products, err
+}
+
+func (r *postgresProductRepository) GetByStoreID(ctx context.Context, storeID uuid.UUID, subcategoryID *uuid.UUID, search *string, availableOnly bool) ([]models.Product, error) {
+	var products []models.Product
+	query := `SELECT id, category_id, subcategory_id, store_id, name, description, price, weight, is_available, created_at, updated_at FROM products WHERE store_id = $1`
+	args := []interface{}{storeID}
+	argPos := 2
 
 	if subcategoryID != nil {
 		query += fmt.Sprintf(" AND subcategory_id = $%d", argPos)
@@ -141,16 +184,33 @@ func NewPostgresStoreRepository(db *database.DB) StoreRepository {
 	return &postgresStoreRepository{db: db}
 }
 
-func (r *postgresStoreRepository) GetAll(ctx context.Context) ([]models.Store, error) {
+func (r *postgresStoreRepository) GetAll(ctx context.Context, categoryType *models.StoreCategoryType, search *string) ([]models.Store, error) {
 	var stores []models.Store
-	query := `SELECT id, name, address, phone, created_at, updated_at FROM stores ORDER BY name`
-	err := r.db.SelectContext(ctx, &stores, query)
+	query := `SELECT id, name, address, phone, description, image_url, rating, category_type, created_at, updated_at FROM stores WHERE 1=1`
+	args := []interface{}{}
+	argPos := 1
+
+	if categoryType != nil {
+		query += fmt.Sprintf(" AND category_type = $%d", argPos)
+		args = append(args, *categoryType)
+		argPos++
+	}
+
+	if search != nil && *search != "" {
+		query += fmt.Sprintf(" AND (name ILIKE $%d OR description ILIKE $%d)", argPos, argPos)
+		args = append(args, "%"+*search+"%")
+		argPos++
+	}
+
+	query += " ORDER BY name"
+
+	err := r.db.SelectContext(ctx, &stores, query, args...)
 	return stores, err
 }
 
 func (r *postgresStoreRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Store, error) {
 	var store models.Store
-	query := `SELECT id, name, address, phone, created_at, updated_at FROM stores WHERE id = $1`
+	query := `SELECT id, name, address, phone, description, image_url, rating, category_type, created_at, updated_at FROM stores WHERE id = $1`
 	err := r.db.GetContext(ctx, &store, query, id)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("магазин не найден")

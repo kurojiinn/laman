@@ -28,6 +28,7 @@ type Order struct {
 	GuestAddress  *string       `db:"guest_address" json:"guest_address,omitempty"`
 	Comment       *string       `db:"comment" json:"comment,omitempty"`
 	Status        OrderStatus   `db:"status" json:"status"`
+	StoreID       uuid.UUID     `db:"store_id" json:"store_id"`
 	PaymentMethod PaymentMethod `db:"payment_method" json:"payment_method"`
 	ItemsTotal    float64       `db:"items_total" json:"items_total"`
 	ServiceFee    float64       `db:"service_fee" json:"service_fee"`

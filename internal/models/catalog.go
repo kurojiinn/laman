@@ -20,7 +20,7 @@ type Product struct {
 	ID            uuid.UUID  `db:"id" json:"id"`
 	CategoryID    uuid.UUID  `db:"category_id" json:"category_id"`
 	SubcategoryID *uuid.UUID `db:"subcategory_id" json:"subcategory_id,omitempty"`
-	StoreID       *uuid.UUID `db:"store_id" json:"store_id,omitempty"`
+	StoreID       uuid.UUID  `db:"store_id" json:"store_id"`
 	Name          string     `db:"name" json:"name"`
 	Description   *string    `db:"description" json:"description,omitempty"`
 	Price         float64    `db:"price" json:"price"`
@@ -41,10 +41,26 @@ type Subcategory struct {
 
 // Store представляет магазин, где можно приобрести товары.
 type Store struct {
-	ID        uuid.UUID `db:"id" json:"id"`
-	Name      string    `db:"name" json:"name"`
-	Address   string    `db:"address" json:"address"`
-	Phone     *string   `db:"phone" json:"phone,omitempty"`
-	CreatedAt time.Time `db:"created_at" json:"created_at"`
-	UpdatedAt time.Time `db:"updated_at" json:"updated_at"`
+	ID           uuid.UUID         `db:"id" json:"id"`
+	Name         string            `db:"name" json:"name"`
+	Address      string            `db:"address" json:"address"`
+	Phone        *string           `db:"phone" json:"phone,omitempty"`
+	Description  *string           `db:"description" json:"description,omitempty"`
+	ImageURL     *string           `db:"image_url" json:"image_url,omitempty"`
+	Rating       float64           `db:"rating" json:"rating"`
+	CategoryType StoreCategoryType `db:"category_type" json:"category_type"`
+	CreatedAt    time.Time         `db:"created_at" json:"created_at"`
+	UpdatedAt    time.Time         `db:"updated_at" json:"updated_at"`
 }
+
+// StoreCategoryType представляет тип магазина.
+type StoreCategoryType string
+
+const (
+	StoreCategoryFood     StoreCategoryType = "FOOD"
+	StoreCategoryClothes  StoreCategoryType = "CLOTHES"
+	StoreCategoryBuilding StoreCategoryType = "BUILDING"
+	StoreCategoryAuto     StoreCategoryType = "AUTO"
+	StoreCategoryHome     StoreCategoryType = "HOME"
+	StoreCategoryPharmacy StoreCategoryType = "PHARMACY"
+)

@@ -113,11 +113,22 @@ func (s *OrderService) CreateOrder(ctx context.Context, req CreateOrderRequest) 
 	var totalWeight float64
 	orderItems := make([]models.OrderItem, 0, len(req.Items))
 	itemLines := make([]string, 0, len(req.Items))
+	var storeID *uuid.UUID
 
 	for _, itemReq := range req.Items {
 		product, ok := productMap[itemReq.ProductID]
 		if !ok {
 			return nil, fmt.Errorf("товар не найден: %s", itemReq.ProductID)
+		}
+
+		if product.StoreID == uuid.Nil {
+			return nil, fmt.Errorf("у товара не задан магазин")
+		}
+
+		if storeID == nil {
+			storeID = &product.StoreID
+		} else if product.StoreID != *storeID {
+			return nil, fmt.Errorf("нельзя создавать заказ из разных магазинов")
 		}
 
 		if !product.IsAvailable {
@@ -148,6 +159,9 @@ func (s *OrderService) CreateOrder(ctx context.Context, req CreateOrderRequest) 
 
 	// Создание заказа
 	now := time.Now()
+	if storeID == nil {
+		return nil, fmt.Errorf("не удалось определить магазин заказа")
+	}
 	order := &models.Order{
 		ID:            uuid.New(),
 		UserID:        req.UserID,
@@ -156,6 +170,7 @@ func (s *OrderService) CreateOrder(ctx context.Context, req CreateOrderRequest) 
 		GuestAddress:  req.GuestAddress,
 		Comment:       req.Comment,
 		Status:        models.OrderStatusNew,
+		StoreID:       *storeID,
 		PaymentMethod: req.PaymentMethod,
 		ItemsTotal:    itemsTotal,
 		ServiceFee:    serviceFee,

@@ -64,6 +64,21 @@ func (s *CatalogService) GetProductsWithFilters(
 	return products, nil
 }
 
+// GetStoreProducts получает товары конкретного магазина.
+func (s *CatalogService) GetStoreProducts(
+	ctx context.Context,
+	storeID uuid.UUID,
+	subcategoryID *uuid.UUID,
+	search *string,
+	availableOnly bool,
+) ([]models.Product, error) {
+	products, err := s.productRepo.GetByStoreID(ctx, storeID, subcategoryID, search, availableOnly)
+	if err != nil {
+		return nil, fmt.Errorf("не удалось получить товары магазина: %w", err)
+	}
+	return products, nil
+}
+
 // GetSubcategories получает подкатегории по ID категории.
 func (s *CatalogService) GetSubcategories(ctx context.Context, categoryID uuid.UUID) ([]models.Subcategory, error) {
 	subcategories, err := s.subcategoryRepo.GetByCategoryID(ctx, categoryID)
@@ -73,6 +88,33 @@ func (s *CatalogService) GetSubcategories(ctx context.Context, categoryID uuid.U
 	return subcategories, nil
 }
 
+// GetStoreSubcategories получает подкатегории товаров магазина.
+func (s *CatalogService) GetStoreSubcategories(ctx context.Context, storeID uuid.UUID) ([]models.Subcategory, error) {
+	subcategories, err := s.subcategoryRepo.GetByStoreID(ctx, storeID)
+	if err != nil {
+		return nil, fmt.Errorf("не удалось получить подкатегории магазина: %w", err)
+	}
+	return subcategories, nil
+}
+
+// GetStores получает магазины с фильтрацией по типу и поиску.
+func (s *CatalogService) GetStores(ctx context.Context, categoryType *models.StoreCategoryType, search *string) ([]models.Store, error) {
+	stores, err := s.storeRepo.GetAll(ctx, categoryType, search)
+	if err != nil {
+		return nil, fmt.Errorf("не удалось получить магазины: %w", err)
+	}
+	return stores, nil
+}
+
+// GetStore получает магазин по ID.
+func (s *CatalogService) GetStore(ctx context.Context, id uuid.UUID) (*models.Store, error) {
+	store, err := s.storeRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("не удалось получить магазин: %w", err)
+	}
+	return store, nil
+}
+
 // GetProduct получает товар по ID.
 func (s *CatalogService) GetProduct(ctx context.Context, id uuid.UUID) (*models.Product, error) {
 	product, err := s.productRepo.GetByID(ctx, id)
@@ -80,13 +122,4 @@ func (s *CatalogService) GetProduct(ctx context.Context, id uuid.UUID) (*models.
 		return nil, fmt.Errorf("не удалось получить товар: %w", err)
 	}
 	return product, nil
-}
-
-// GetStores получает все магазины.
-func (s *CatalogService) GetStores(ctx context.Context) ([]models.Store, error) {
-	stores, err := s.storeRepo.GetAll(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("не удалось получить магазины: %w", err)
-	}
-	return stores, nil
 }
