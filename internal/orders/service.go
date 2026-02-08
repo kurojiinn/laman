@@ -15,15 +15,15 @@ import (
 // OrderService обрабатывает бизнес-логику, связанную с созданием заказов,
 // расчетом цен и управлением жизненным циклом.
 type OrderService struct {
-	orderRepo     OrderRepository
-	orderItemRepo OrderItemRepository
-	productRepo   ProductRepository
-	deliveryRepo  DeliveryRepository
-	paymentRepo   PaymentRepository
-	notifier      *observability.TelegramNotifier
-	logger        *zap.Logger
+	orderRepo         OrderRepository
+	orderItemRepo     OrderItemRepository
+	productRepo       ProductRepository
+	deliveryRepo      DeliveryRepository
+	paymentRepo       PaymentRepository
+	notifier          *observability.TelegramNotifier
+	logger            *zap.Logger
 	serviceFeePercent float64
-	deliveryFee    float64
+	deliveryFee       float64
 }
 
 // ProductRepository определяет интерфейс, необходимый из модуля catalog.
@@ -54,11 +54,11 @@ func NewOrderService(
 	logger *zap.Logger,
 ) *OrderService {
 	return &OrderService{
-		orderRepo:        orderRepo,
-		orderItemRepo:    orderItemRepo,
-		productRepo:      productRepo,
-		deliveryRepo:     deliveryRepo,
-		paymentRepo:      paymentRepo,
+		orderRepo:         orderRepo,
+		orderItemRepo:     orderItemRepo,
+		productRepo:       productRepo,
+		deliveryRepo:      deliveryRepo,
+		paymentRepo:       paymentRepo,
 		serviceFeePercent: serviceFeePercent,
 		deliveryFee:       deliveryFee,
 		notifier:          notifier,
@@ -68,14 +68,14 @@ func NewOrderService(
 
 // CreateOrderRequest представляет запрос на создание заказа.
 type CreateOrderRequest struct {
-	UserID      *uuid.UUID              `json:"user_id,omitempty"`
-	GuestName   *string                 `json:"guest_name,omitempty"`
-	GuestPhone  *string                 `json:"guest_phone,omitempty"`
-	GuestAddress *string                `json:"guest_address,omitempty"`
-	Comment     *string                 `json:"comment,omitempty"`
-	Items       []CreateOrderItemRequest `json:"items" binding:"required"`
-	PaymentMethod models.PaymentMethod   `json:"payment_method" binding:"required"`
-	DeliveryAddress string               `json:"delivery_address" binding:"required"`
+	UserID          *uuid.UUID               `json:"user_id,omitempty"`
+	GuestName       *string                  `json:"guest_name,omitempty"`
+	GuestPhone      *string                  `json:"guest_phone,omitempty"`
+	GuestAddress    *string                  `json:"guest_address,omitempty"`
+	Comment         *string                  `json:"comment,omitempty"`
+	Items           []CreateOrderItemRequest `json:"items" binding:"required"`
+	PaymentMethod   models.PaymentMethod     `json:"payment_method" binding:"required"`
+	DeliveryAddress string                   `json:"delivery_address" binding:"required"`
 }
 
 // CreateOrderItemRequest представляет товар в запросе на создание заказа.
@@ -149,19 +149,20 @@ func (s *OrderService) CreateOrder(ctx context.Context, req CreateOrderRequest) 
 	// Создание заказа
 	now := time.Now()
 	order := &models.Order{
-		ID:           uuid.New(),
-		UserID:       req.UserID,
-		GuestName:    req.GuestName,
-		GuestPhone:   req.GuestPhone,
-		GuestAddress: req.GuestAddress,
-		Comment:      req.Comment,
-		Status:       models.OrderStatusNew,
-		ItemsTotal:   itemsTotal,
-		ServiceFee:   serviceFee,
-		DeliveryFee:  s.deliveryFee,
-		FinalTotal:   finalTotal,
-		CreatedAt:    now,
-		UpdatedAt:    now,
+		ID:            uuid.New(),
+		UserID:        req.UserID,
+		GuestName:     req.GuestName,
+		GuestPhone:    req.GuestPhone,
+		GuestAddress:  req.GuestAddress,
+		Comment:       req.Comment,
+		Status:        models.OrderStatusNew,
+		PaymentMethod: req.PaymentMethod,
+		ItemsTotal:    itemsTotal,
+		ServiceFee:    serviceFee,
+		DeliveryFee:   s.deliveryFee,
+		FinalTotal:    finalTotal,
+		CreatedAt:     now,
+		UpdatedAt:     now,
 	}
 
 	// Создание заказа в транзакции
@@ -277,6 +278,75 @@ func shortUUID(id uuid.UUID) string {
 	return value[:8]
 }
 
+func buildCustomerTextFromOrder(order *models.Order) string {
+	if order.GuestName != nil && *order.GuestName != "" {
+		return *order.GuestName
+	}
+	if order.UserID != nil {
+		return fmt.Sprintf("Пользователь %s", shortUUID(*order.UserID))
+	}
+	return fmt.Sprintf("Гость %s", shortUUID(order.ID))
+}
+
+func buildPhoneTextFromOrder(order *models.Order) string {
+	if order.GuestPhone != nil && *order.GuestPhone != "" {
+		return *order.GuestPhone
+	}
+	return ""
+}
+
+func buildCommentTextFromOrder(order *models.Order) string {
+	if order.Comment != nil && *order.Comment != "" {
+		return *order.Comment
+	}
+	return ""
+}
+
+func buildAddressTextFromOrder(order *models.Order) string {
+	if order.GuestAddress != nil && *order.GuestAddress != "" {
+		return *order.GuestAddress
+	}
+	return ""
+}
+
+func (s *OrderService) buildItemsText(ctx context.Context, orderID uuid.UUID) string {
+	items, err := s.orderItemRepo.GetByOrderID(ctx, orderID)
+	if err != nil || len(items) == 0 {
+		return ""
+	}
+
+	ids := make([]uuid.UUID, 0, len(items))
+	seen := make(map[uuid.UUID]struct{})
+	for _, item := range items {
+		if _, ok := seen[item.ProductID]; ok {
+			continue
+		}
+		seen[item.ProductID] = struct{}{}
+		ids = append(ids, item.ProductID)
+	}
+
+	products, err := s.productRepo.GetByIDs(ctx, ids)
+	if err != nil {
+		return ""
+	}
+
+	nameByID := make(map[uuid.UUID]string, len(products))
+	for _, p := range products {
+		nameByID[p.ID] = p.Name
+	}
+
+	lines := make([]string, 0, len(items))
+	for _, item := range items {
+		name := nameByID[item.ProductID]
+		if name == "" {
+			name = item.ProductID.String()[:8]
+		}
+		lines = append(lines, fmt.Sprintf("%s ×%d", name, item.Quantity))
+	}
+
+	return strings.Join(lines, ", ")
+}
+
 // GetOrder получает заказ по ID с товарами.
 func (s *OrderService) GetOrder(ctx context.Context, id uuid.UUID) (*models.OrderWithItems, error) {
 	order, err := s.orderRepo.GetByID(ctx, id)
@@ -325,6 +395,21 @@ func (s *OrderService) UpdateOrderStatus(ctx context.Context, id uuid.UUID, newS
 	// Обновление статуса
 	if err := s.orderRepo.UpdateStatus(ctx, id, newStatus); err != nil {
 		return fmt.Errorf("не удалось обновить статус заказа: %w", err)
+	}
+
+	if newStatus == models.OrderStatusCancelled && s.notifier != nil {
+		itemsText := s.buildItemsText(ctx, order.ID)
+		notifyCtx := observability.WithOrderMessageMeta(ctx, observability.OrderMessageMeta{
+			Customer: buildCustomerTextFromOrder(order),
+			Phone:    buildPhoneTextFromOrder(order),
+			Comment:  buildCommentTextFromOrder(order),
+			Address:  buildAddressTextFromOrder(order),
+			Items:    itemsText,
+		})
+
+		if err := s.notifier.NotifyOrderCancelled(notifyCtx, order); err != nil && s.logger != nil {
+			s.logger.Warn("Не удалось отправить отмену в Telegram", zap.Error(err))
+		}
 	}
 
 	return nil

@@ -1,4 +1,5 @@
 import SwiftUI
+import Foundation
 
 struct OrderView: View {
     @EnvironmentObject private var appState: AppState
@@ -18,6 +19,11 @@ struct OrderView: View {
 
     private let priceColor = Color(red: 0.06, green: 0.73, blue: 0.51)
     private let accentBlue = Color(red: 0.23, green: 0.51, blue: 0.96)
+    private var isFormValid: Bool {
+        !guestName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !guestPhone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !deliveryAddress.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
     var body: some View {
         Form {
@@ -76,6 +82,11 @@ struct OrderView: View {
                     Text("Перевод").tag(PaymentMethod.transfer)
                 }
                 .pickerStyle(.segmented)
+                if paymentMethod == .transfer {
+                    Text("Реквизиты будут доступны после подтверждения заказа")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .navigationTitle("Оформление")
@@ -87,7 +98,7 @@ struct OrderView: View {
                 Button("Оформить") {
                     Task { await submitOrder() }
                 }
-                .disabled(appState.totalItems == 0 || isSubmitting)
+                .disabled(appState.totalItems == 0 || isSubmitting || !isFormValid)
             }
         }
         .overlay {
@@ -128,10 +139,14 @@ struct OrderView: View {
             CreateOrderItem(productId: item.product.id, quantity: item.quantity)
         }
 
+        let resolvedGuestAddress = guestAddress.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? deliveryAddress
+            : guestAddress
+
         let request = CreateOrderRequest(
             guestName: guestName,
             guestPhone: guestPhone,
-            guestAddress: guestAddress,
+            guestAddress: resolvedGuestAddress,
             deliveryAddress: deliveryAddress,
             comment: comment.isEmpty ? nil : comment,
             paymentMethod: paymentMethod,

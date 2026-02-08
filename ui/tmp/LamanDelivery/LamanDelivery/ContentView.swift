@@ -2,58 +2,58 @@ import SwiftUI
 import Combine
 
 final class AppState: ObservableObject {
-    @Published var categories: [Category] = []
-    @Published var products: [Product] = []
     @Published var cart: [UUID: Int] = [:]
     @Published var orders: [Order] = []
-    @Published var isLoading: Bool = false
-    @Published var errorMessage: String? = nil
 
     private let api = LamanAPI()
+    private var productIndex: [UUID: Product] = [:]
 
-    @MainActor
-    func loadCatalog() async {
-        isLoading = true
-        errorMessage = nil
-        do {
-            async let categoriesTask = api.getCategories()
-            async let productsTask = api.getProducts()
-            categories = try await categoriesTask
-            products = try await productsTask
-        } catch {
-            errorMessage = error.localizedDescription
+    func mergeProducts(_ products: [Product]) {
+        for product in products {
+            productIndex[product.id] = product
         }
-        isLoading = false
     }
 
-    @MainActor
-    func loadProducts(categoryId: UUID?) async {
-        isLoading = true
-        errorMessage = nil
-        do {
-            products = try await api.getProducts(categoryId: categoryId)
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-        isLoading = false
+    func productName(for productId: UUID) -> String {
+        productIndex[productId]?.name ?? "Товар \(productId.uuidString.prefix(8))"
     }
 
     func quantity(for productID: UUID) -> Int {
         cart[productID] ?? 0
     }
 
-    func setQuantity(_ quantity: Int, for productID: UUID) {
+    func setQuantity(_ quantity: Int, for product: Product) {
+        productIndex[product.id] = product
         if quantity <= 0 {
-            cart.removeValue(forKey: productID)
+            cart.removeValue(forKey: product.id)
         } else {
-            cart[productID] = quantity
+            cart[product.id] = quantity
         }
     }
 
+    func removeProduct(_ product: Product) {
+        cart.removeValue(forKey: product.id)
+    }
+
+    func clearCart() {
+        cart.removeAll()
+    }
+
     var cartItems: [CartItem] {
-        products.compactMap { product in
-            let qty = cart[product.id] ?? 0
+        cart.compactMap { entry in
+            let (productID, qty) = entry
             guard qty > 0 else { return nil }
+            let product = productIndex[productID] ?? Product(
+                id: productID,
+                categoryId: nil,
+                subcategoryId: nil,
+                storeId: nil,
+                name: "Товар",
+                description: nil,
+                price: 0,
+                weight: nil,
+                isAvailable: true
+            )
             return CartItem(product: product, quantity: qty)
         }
     }
@@ -78,6 +78,12 @@ final class AppState: ObservableObject {
         cartItems.reduce(0) { $0 + $1.quantity }
     }
 
+    var totalWeight: Double {
+        cartItems.reduce(0) { total, item in
+            total + (item.product.weight ?? 0) * Double(item.quantity)
+        }
+    }
+
     @MainActor
     func submitOrder(request: CreateOrderRequest) async throws -> Order {
         let order = try await api.createOrder(request: request)
@@ -85,10 +91,19 @@ final class AppState: ObservableObject {
         cart.removeAll()
         return order
     }
+
+    @MainActor
+    func cancelOrder(order: Order) async throws {
+        try await api.updateOrderStatus(orderId: order.id, status: "CANCELLED")
+        if let index = orders.firstIndex(where: { $0.id == order.id }) {
+            orders[index] = order.withStatus("CANCELLED")
+        }
+    }
 }
 
 struct ContentView: View {
     @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var catalogVM: CatalogViewModel
 
     var body: some View {
         TabView {
@@ -114,18 +129,20 @@ struct ContentView: View {
             }
         }
         .task {
-            await appState.loadCatalog()
+            await catalogVM.loadInitial()
         }
     }
 }
 
 struct CartItem: Identifiable {
-    let id = UUID()
+    var id: UUID { product.id }
     let product: Product
     let quantity: Int
 }
 
 #Preview {
+    let appState = AppState()
     ContentView()
-        .environmentObject(AppState())
+        .environmentObject(appState)
+        .environmentObject(CatalogViewModel(appState: appState))
 }

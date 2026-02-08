@@ -1,8 +1,8 @@
 package catalog
 
 import (
-	"context"
 	"Laman/internal/models"
+	"context"
 	"github.com/google/uuid"
 )
 
@@ -10,19 +10,25 @@ import (
 type CategoryRepository interface {
 	// GetAll получает все категории.
 	GetAll(ctx context.Context) ([]models.Category, error)
-	
+
 	// GetByID получает категорию по ID.
 	GetByID(ctx context.Context, id uuid.UUID) (*models.Category, error)
+}
+
+// SubcategoryRepository определяет интерфейс для доступа к подкатегориям.
+type SubcategoryRepository interface {
+	// GetByCategoryID получает подкатегории по ID категории.
+	GetByCategoryID(ctx context.Context, categoryID uuid.UUID) ([]models.Subcategory, error)
 }
 
 // ProductRepository определяет интерфейс для доступа к данным товаров.
 type ProductRepository interface {
 	// GetAll получает все товары с опциональными фильтрами.
-	GetAll(ctx context.Context, categoryID *uuid.UUID, availableOnly bool) ([]models.Product, error)
-	
+	GetAll(ctx context.Context, categoryID *uuid.UUID, subcategoryID *uuid.UUID, search *string, availableOnly bool) ([]models.Product, error)
+
 	// GetByID получает товар по ID.
 	GetByID(ctx context.Context, id uuid.UUID) (*models.Product, error)
-	
+
 	// GetByIDs получает несколько товаров по их ID.
 	GetByIDs(ctx context.Context, ids []uuid.UUID) ([]models.Product, error)
 }
@@ -31,7 +37,7 @@ type ProductRepository interface {
 type StoreRepository interface {
 	// GetAll получает все магазины.
 	GetAll(ctx context.Context) ([]models.Store, error)
-	
+
 	// GetByID получает магазин по ID.
 	GetByID(ctx context.Context, id uuid.UUID) (*models.Store, error)
 }

@@ -1,11 +1,12 @@
 import SwiftUI
+import Foundation
 
 struct CatalogView: View {
     @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var catalogVM: CatalogViewModel
 
     private let priceColor = Color(red: 0.06, green: 0.73, blue: 0.51)
     private let accentBlue = Color(red: 0.23, green: 0.51, blue: 0.96)
-    @State private var selectedCategoryId: UUID? = nil
 
     var body: some View {
         ZStack {
@@ -17,19 +18,36 @@ struct CatalogView: View {
             .ignoresSafeArea()
 
             List {
-                if !appState.categories.isEmpty {
+                if !catalogVM.categories.isEmpty {
                     Section("Категории") {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 8) {
-                                categoryChip(title: "Все", isSelected: selectedCategoryId == nil) {
-                                    selectedCategoryId = nil
-                                    Task { await appState.loadProducts(categoryId: nil) }
+                                categoryChip(title: "Все", isSelected: catalogVM.selectedCategoryId == nil) {
+                                    Task { await catalogVM.selectCategory(nil) }
                                 }
 
-                                ForEach(appState.categories) { category in
-                                    categoryChip(title: category.name, isSelected: selectedCategoryId == category.id) {
-                                        selectedCategoryId = category.id
-                                        Task { await appState.loadProducts(categoryId: category.id) }
+                                ForEach(catalogVM.categories) { category in
+                                    categoryChip(title: category.name, isSelected: catalogVM.selectedCategoryId == category.id) {
+                                        Task { await catalogVM.selectCategory(category.id) }
+                                    }
+                                }
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
+                }
+
+                if !catalogVM.subcategories.isEmpty {
+                    Section("Подкатегории") {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                categoryChip(title: "Все", isSelected: catalogVM.selectedSubcategoryId == nil) {
+                                    Task { await catalogVM.selectSubcategory(nil) }
+                                }
+
+                                ForEach(catalogVM.subcategories) { subcategory in
+                                    categoryChip(title: subcategory.name, isSelected: catalogVM.selectedSubcategoryId == subcategory.id) {
+                                        Task { await catalogVM.selectSubcategory(subcategory.id) }
                                     }
                                 }
                             }
@@ -39,7 +57,7 @@ struct CatalogView: View {
                 }
 
                 Section("Товары") {
-                    ForEach(appState.products) { product in
+                    ForEach(catalogVM.products) { product in
                         HStack(alignment: .center, spacing: 12) {
                             Image(systemName: productIcon(for: product))
                                 .font(.title2)
@@ -63,7 +81,7 @@ struct CatalogView: View {
 
                                 Stepper(value: Binding(
                                     get: { appState.quantity(for: product.id) },
-                                    set: { appState.setQuantity($0, for: product.id) }
+                                    set: { appState.setQuantity($0, for: product) }
                                 ), in: 0...99) {
                                     Text("\(appState.quantity(for: product.id))")
                                         .font(.subheadline)
@@ -78,6 +96,10 @@ struct CatalogView: View {
             .listStyle(.insetGrouped)
         }
         .navigationTitle("Каталог")
+        .searchable(text: Binding(
+            get: { catalogVM.searchText },
+            set: { catalogVM.searchTextChanged($0) }
+        ))
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 NavigationLink {
@@ -89,7 +111,7 @@ struct CatalogView: View {
             }
         }
         .overlay {
-            if appState.isLoading {
+            if catalogVM.isLoading {
                 ProgressView("Загрузка каталога...")
                     .padding()
                     .background(.ultraThinMaterial)
@@ -97,12 +119,12 @@ struct CatalogView: View {
             }
         }
         .alert("Ошибка сети", isPresented: Binding(
-            get: { appState.errorMessage != nil },
-            set: { _ in appState.errorMessage = nil }
+            get: { catalogVM.errorMessage != nil },
+            set: { _ in catalogVM.errorMessage = nil }
         )) {
             Button("Ок", role: .cancel) {}
         } message: {
-            Text(appState.errorMessage ?? "Неизвестная ошибка")
+            Text(catalogVM.errorMessage ?? "Неизвестная ошибка")
         }
     }
 
@@ -150,6 +172,8 @@ struct CatalogView: View {
 }
 
 #Preview {
+    let appState = AppState()
     NavigationStack { CatalogView() }
-        .environmentObject(AppState())
+        .environmentObject(appState)
+        .environmentObject(CatalogViewModel(appState: appState))
 }

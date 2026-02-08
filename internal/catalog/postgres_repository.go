@@ -1,11 +1,11 @@
 package catalog
 
 import (
+	"Laman/internal/database"
+	"Laman/internal/models"
 	"context"
 	"database/sql"
 	"fmt"
-	"Laman/internal/database"
-	"Laman/internal/models"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 )
@@ -40,6 +40,23 @@ func (r *postgresCategoryRepository) GetByID(ctx context.Context, id uuid.UUID) 
 	return &category, nil
 }
 
+// postgresSubcategoryRepository реализует SubcategoryRepository используя PostgreSQL.
+type postgresSubcategoryRepository struct {
+	db *database.DB
+}
+
+// NewPostgresSubcategoryRepository создает новый PostgreSQL репозиторий подкатегорий.
+func NewPostgresSubcategoryRepository(db *database.DB) SubcategoryRepository {
+	return &postgresSubcategoryRepository{db: db}
+}
+
+func (r *postgresSubcategoryRepository) GetByCategoryID(ctx context.Context, categoryID uuid.UUID) ([]models.Subcategory, error) {
+	var subcategories []models.Subcategory
+	query := `SELECT id, category_id, name, created_at, updated_at FROM subcategories WHERE category_id = $1 ORDER BY name`
+	err := r.db.SelectContext(ctx, &subcategories, query, categoryID)
+	return subcategories, err
+}
+
 // postgresProductRepository реализует ProductRepository используя PostgreSQL.
 type postgresProductRepository struct {
 	db *database.DB
@@ -50,15 +67,27 @@ func NewPostgresProductRepository(db *database.DB) ProductRepository {
 	return &postgresProductRepository{db: db}
 }
 
-func (r *postgresProductRepository) GetAll(ctx context.Context, categoryID *uuid.UUID, availableOnly bool) ([]models.Product, error) {
+func (r *postgresProductRepository) GetAll(ctx context.Context, categoryID *uuid.UUID, subcategoryID *uuid.UUID, search *string, availableOnly bool) ([]models.Product, error) {
 	var products []models.Product
-	query := `SELECT id, category_id, store_id, name, description, price, weight, is_available, created_at, updated_at FROM products WHERE 1=1`
+	query := `SELECT id, category_id, subcategory_id, store_id, name, description, price, weight, is_available, created_at, updated_at FROM products WHERE 1=1`
 	args := []interface{}{}
 	argPos := 1
 
 	if categoryID != nil {
 		query += fmt.Sprintf(" AND category_id = $%d", argPos)
 		args = append(args, *categoryID)
+		argPos++
+	}
+
+	if subcategoryID != nil {
+		query += fmt.Sprintf(" AND subcategory_id = $%d", argPos)
+		args = append(args, *subcategoryID)
+		argPos++
+	}
+
+	if search != nil && *search != "" {
+		query += fmt.Sprintf(" AND (name ILIKE $%d OR COALESCE(description, '') ILIKE $%d)", argPos, argPos)
+		args = append(args, "%"+*search+"%")
 		argPos++
 	}
 
@@ -76,7 +105,7 @@ func (r *postgresProductRepository) GetAll(ctx context.Context, categoryID *uuid
 
 func (r *postgresProductRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Product, error) {
 	var product models.Product
-	query := `SELECT id, category_id, store_id, name, description, price, weight, is_available, created_at, updated_at FROM products WHERE id = $1`
+	query := `SELECT id, category_id, subcategory_id, store_id, name, description, price, weight, is_available, created_at, updated_at FROM products WHERE id = $1`
 	err := r.db.GetContext(ctx, &product, query, id)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("товар не найден")
@@ -93,7 +122,7 @@ func (r *postgresProductRepository) GetByIDs(ctx context.Context, ids []uuid.UUI
 	}
 
 	var products []models.Product
-	query, args, err := sqlx.In(`SELECT id, category_id, store_id, name, description, price, weight, is_available, created_at, updated_at FROM products WHERE id IN (?)`, ids)
+	query, args, err := sqlx.In(`SELECT id, category_id, subcategory_id, store_id, name, description, price, weight, is_available, created_at, updated_at FROM products WHERE id IN (?)`, ids)
 	if err != nil {
 		return nil, err
 	}
