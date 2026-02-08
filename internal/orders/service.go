@@ -3,9 +3,13 @@ package orders
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
+
 	"Laman/internal/models"
+	"Laman/internal/observability"
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 )
 
 // OrderService обрабатывает бизнес-логику, связанную с созданием заказов,
@@ -16,6 +20,8 @@ type OrderService struct {
 	productRepo   ProductRepository
 	deliveryRepo  DeliveryRepository
 	paymentRepo   PaymentRepository
+	notifier      *observability.TelegramNotifier
+	logger        *zap.Logger
 	serviceFeePercent float64
 	deliveryFee    float64
 }
@@ -44,6 +50,8 @@ func NewOrderService(
 	paymentRepo PaymentRepository,
 	serviceFeePercent float64,
 	deliveryFee float64,
+	notifier *observability.TelegramNotifier,
+	logger *zap.Logger,
 ) *OrderService {
 	return &OrderService{
 		orderRepo:        orderRepo,
@@ -53,6 +61,8 @@ func NewOrderService(
 		paymentRepo:      paymentRepo,
 		serviceFeePercent: serviceFeePercent,
 		deliveryFee:       deliveryFee,
+		notifier:          notifier,
+		logger:            logger,
 	}
 }
 
@@ -102,6 +112,7 @@ func (s *OrderService) CreateOrder(ctx context.Context, req CreateOrderRequest) 
 	var itemsTotal float64
 	var totalWeight float64
 	orderItems := make([]models.OrderItem, 0, len(req.Items))
+	itemLines := make([]string, 0, len(req.Items))
 
 	for _, itemReq := range req.Items {
 		product, ok := productMap[itemReq.ProductID]
@@ -127,6 +138,8 @@ func (s *OrderService) CreateOrder(ctx context.Context, req CreateOrderRequest) 
 			Price:     product.Price,
 			CreatedAt: time.Now(),
 		})
+
+		itemLines = append(itemLines, fmt.Sprintf("%s ×%d", product.Name, itemReq.Quantity))
 	}
 
 	// Расчет сборов
@@ -196,10 +209,72 @@ func (s *OrderService) CreateOrder(ctx context.Context, req CreateOrderRequest) 
 		return nil, fmt.Errorf("не удалось создать оплату: %w", err)
 	}
 
+	if s.notifier != nil {
+		itemsText := strings.Join(itemLines, ", ")
+		customerText := buildCustomerText(req, order.ID)
+		addressText := buildAddressText(req)
+
+		notifyCtx := observability.WithOrderMessageMeta(ctx, observability.OrderMessageMeta{
+			Customer: customerText,
+			Phone:    buildPhoneText(req),
+			Comment:  buildCommentText(req),
+			Address:  addressText,
+			Items:    itemsText,
+		})
+
+		if err := s.notifier.NotifyNewOrder(notifyCtx, order); err != nil && s.logger != nil {
+			s.logger.Warn("Не удалось отправить уведомление в Telegram", zap.Error(err))
+		}
+	}
+
 	return &models.OrderWithItems{
 		Order: *order,
 		Items: orderItems,
 	}, nil
+}
+
+func buildCustomerText(req CreateOrderRequest, orderID uuid.UUID) string {
+	if req.GuestName != nil && *req.GuestName != "" {
+		return *req.GuestName
+	}
+
+	if req.UserID != nil {
+		return fmt.Sprintf("Пользователь %s", shortUUID(*req.UserID))
+	}
+
+	return fmt.Sprintf("Гость %s", shortUUID(orderID))
+}
+
+func buildPhoneText(req CreateOrderRequest) string {
+	if req.GuestPhone != nil && *req.GuestPhone != "" {
+		return *req.GuestPhone
+	}
+	return ""
+}
+
+func buildCommentText(req CreateOrderRequest) string {
+	if req.Comment != nil && *req.Comment != "" {
+		return *req.Comment
+	}
+	return ""
+}
+
+func buildAddressText(req CreateOrderRequest) string {
+	if req.DeliveryAddress != "" {
+		return req.DeliveryAddress
+	}
+	if req.GuestAddress != nil && *req.GuestAddress != "" {
+		return *req.GuestAddress
+	}
+	return ""
+}
+
+func shortUUID(id uuid.UUID) string {
+	value := id.String()
+	if len(value) <= 8 {
+		return value
+	}
+	return value[:8]
 }
 
 // GetOrder получает заказ по ID с товарами.

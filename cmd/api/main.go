@@ -59,6 +59,17 @@ func main() {
 	}
 	defer db.Close()
 
+	// Инициализация Telegram уведомлений (опционально)
+	var telegramNotifier *observability.TelegramNotifier
+	if cfg.Telegram.BotToken != "" && cfg.Telegram.ChatID != "" {
+		notifier, err := observability.NewTelegramNotifier(cfg.Telegram.BotToken, cfg.Telegram.ChatID)
+		if err != nil {
+			logger.Warn("Telegram уведомления отключены", zap.Error(err))
+		} else {
+			telegramNotifier = notifier
+		}
+	}
+
 	// Инициализация репозиториев
 	authRepo := auth.NewPostgresAuthRepository(db)
 	userRepo := users.NewPostgresUserRepository(db)
@@ -82,6 +93,8 @@ func main() {
 		paymentRepo,
 		5.0,  // 5% сервисный сбор
 		200.0, // 200 руб. стоимость доставки
+		telegramNotifier,
+		logger,
 	)
 
 	// Инициализация обработчиков

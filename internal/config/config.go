@@ -12,6 +12,7 @@ type Config struct {
 	Database DatabaseConfig
 	JWT      JWTConfig
 	Jaeger   JaegerConfig
+	Telegram TelegramConfig
 }
 
 // ServerConfig содержит конфигурацию сервера.
@@ -40,6 +41,12 @@ type JaegerConfig struct {
 	Endpoint string
 }
 
+// TelegramConfig содержит конфигурацию Telegram бота.
+type TelegramConfig struct {
+	BotToken string
+	ChatID   string
+}
+
 // Load загружает конфигурацию из переменных окружения.
 func Load() (*Config, error) {
 	cfg := &Config{
@@ -60,6 +67,10 @@ func Load() (*Config, error) {
 		},
 		Jaeger: JaegerConfig{
 			Endpoint: getEnv("JAEGER_ENDPOINT", "http://jaeger:14268/api/traces"),
+		},
+		Telegram: TelegramConfig{
+			BotToken: getEnv("TG_BOT_TOKEN", ""),
+			ChatID:   getEnv("TG_CHAT_ID", ""),
 		},
 	}
 
