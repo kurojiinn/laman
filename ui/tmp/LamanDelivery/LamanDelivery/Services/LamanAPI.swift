@@ -14,7 +14,7 @@ final class LamanAPI {
         return try await fetch(url: url, responseType: [Category].self)
     }
 
-    func getProducts(categoryId: UUID? = nil) async throws -> [Product] {
+    func getProducts(categoryId: UUID?, subcategoryId: UUID?, search: String?) async throws -> [Product] {
         var components = URLComponents(url: baseURL.appendingPathComponent("api/v1/catalog/products"), resolvingAgainstBaseURL: false)
         var queryItems: [URLQueryItem] = [
             URLQueryItem(name: "available_only", value: "true")
@@ -22,9 +22,22 @@ final class LamanAPI {
         if let categoryId {
             queryItems.append(URLQueryItem(name: "category_id", value: categoryId.uuidString))
         }
+        if let subcategoryId {
+            queryItems.append(URLQueryItem(name: "subcategory_id", value: subcategoryId.uuidString))
+        }
+        if let search, !search.isEmpty {
+            queryItems.append(URLQueryItem(name: "search", value: search))
+        }
         components?.queryItems = queryItems
         guard let url = components?.url else { throw LamanAPIError.invalidURL }
         return try await fetch(url: url, responseType: [Product].self)
+    }
+
+    func getSubcategories(categoryId: UUID) async throws -> [Subcategory] {
+        var components = URLComponents(url: baseURL.appendingPathComponent("api/v1/catalog/subcategories"), resolvingAgainstBaseURL: false)
+        components?.queryItems = [URLQueryItem(name: "category_id", value: categoryId.uuidString)]
+        guard let url = components?.url else { throw LamanAPIError.invalidURL }
+        return try await fetch(url: url, responseType: [Subcategory].self)
     }
 
     func createOrder(request: CreateOrderRequest) async throws -> Order {
@@ -37,6 +50,20 @@ final class LamanAPI {
         let (data, response) = try await session.data(for: req)
         try validate(response: response, data: data)
         return try JSONDecoder.laman.decode(Order.self, from: data)
+    }
+
+    func updateOrderStatus(orderId: UUID, status: String) async throws {
+        let url = baseURL
+            .appendingPathComponent("api/v1/orders")
+            .appendingPathComponent(orderId.uuidString)
+            .appendingPathComponent("status")
+        var req = URLRequest(url: url)
+        req.httpMethod = "PUT"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONEncoder.laman.encode(["status": status])
+
+        let (data, response) = try await session.data(for: req)
+        try validate(response: response, data: data)
     }
 
     private func fetch<T: Decodable>(url: URL, responseType: T.Type) async throws -> T {

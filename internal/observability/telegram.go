@@ -104,6 +104,51 @@ func (n *TelegramNotifier) NotifyNewOrder(ctx context.Context, order *models.Ord
 	return nil
 }
 
+// NotifyOrderCancelled отправляет уведомление об отмене заказа.
+func (n *TelegramNotifier) NotifyOrderCancelled(ctx context.Context, order *models.Order) error {
+	if n == nil {
+		return nil
+	}
+	if order == nil {
+		return errors.New("order is nil")
+	}
+
+	meta, _ := orderMessageMetaFromContext(ctx)
+	message := buildCancelledOrderMessage(order, meta)
+
+	payload := sendMessageRequest{
+		ChatID:                n.chatID,
+		Text:                  message,
+		ParseMode:             "HTML",
+		DisableWebPagePreview: true,
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	url := fmt.Sprintf("%s/bot%s/sendMessage", n.apiBase, n.botToken)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := n.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("telegram api returned %s: %s", resp.Status, string(respBody))
+	}
+
+	return nil
+}
+
 type sendMessageRequest struct {
 	ChatID                string `json:"chat_id"`
 	Text                  string `json:"text"`
@@ -124,6 +169,37 @@ func buildOrderMessage(order *models.Order, meta OrderMessageMeta) string {
 
 	return fmt.Sprintf(
 		"<b>🆕 Новый заказ</b> <code>%s</code>\n"+
+			"<b>👤 Клиент:</b> %s\n"+
+			"<b>📞 Телефон:</b> %s\n"+
+			"<b>📝 Комментарий:</b> %s\n"+
+			"<b>📍 Адрес:</b> %s\n"+
+			"<b>💰 Итого:</b> %s\n"+
+			"<b>📦 Товары:</b> %s\n"+
+			"<b>⏰ Время:</b> %s",
+		html.EscapeString(shortID),
+		html.EscapeString(customer),
+		html.EscapeString(phone),
+		html.EscapeString(comment),
+		html.EscapeString(address),
+		html.EscapeString(total),
+		html.EscapeString(items),
+		html.EscapeString(createdAt),
+	)
+}
+
+func buildCancelledOrderMessage(order *models.Order, meta OrderMessageMeta) string {
+	shortID := shortOrderID(order.ID.String())
+	customer := fallback(meta.Customer, "Гость")
+	phone := fallback(meta.Phone, "—")
+	comment := fallback(meta.Comment, "—")
+	address := fallback(meta.Address, "—")
+	items := fallback(meta.Items, "—")
+
+	createdAt := order.CreatedAt.Local().Format("15:04")
+	total := formatMoney(order.FinalTotal)
+
+	return fmt.Sprintf(
+		"<b>❌ Заказ отменён</b> <code>%s</code>\n"+
 			"<b>👤 Клиент:</b> %s\n"+
 			"<b>📞 Телефон:</b> %s\n"+
 			"<b>📝 Комментарий:</b> %s\n"+

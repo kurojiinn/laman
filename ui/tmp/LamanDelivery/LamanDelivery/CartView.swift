@@ -1,4 +1,5 @@
 import SwiftUI
+import Foundation
 
 struct CartView: View {
     @EnvironmentObject private var appState: AppState
@@ -36,6 +37,31 @@ struct CartView: View {
                                     Text(priceText(Double(item.quantity) * item.product.price))
                                         .foregroundStyle(priceColor)
                                 }
+                                .swipeActions(edge: .trailing) {
+                                    Button(role: .destructive) {
+                                        appState.removeProduct(item.product)
+                                    } label: {
+                                        Label("Удалить", systemImage: "trash")
+                                    }
+                                }
+                            }
+                        }
+
+                        Section {
+                            let isHeavy = appState.totalWeight > 15
+                            HStack(spacing: 8) {
+                                if isHeavy {
+                                    Image(systemName: "truck.box.fill")
+                                        .foregroundStyle(Color.orange)
+                                }
+                                let totalWeightText = String(format: "%.1f", appState.totalWeight)
+                                Text("Суммарный вес: \(totalWeightText) кг")
+                                    .foregroundStyle(isHeavy ? Color.orange : .secondary)
+                            }
+                            if isHeavy {
+                                Text("Применен грузовой тариф")
+                                    .font(.footnote)
+                                    .foregroundStyle(Color.orange)
                             }
                         }
 
@@ -62,6 +88,18 @@ struct CartView: View {
                                 Text(priceText(appState.total))
                                     .font(.headline)
                                     .foregroundStyle(priceColor)
+                            }
+                        }
+
+                        Section {
+                            Button(role: .destructive) {
+                                appState.clearCart()
+                            } label: {
+                                HStack {
+                                    Spacer()
+                                    Text("Очистить корзину")
+                                    Spacer()
+                                }
                             }
                         }
                     }

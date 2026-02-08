@@ -74,6 +74,7 @@ func main() {
 	authRepo := auth.NewPostgresAuthRepository(db)
 	userRepo := users.NewPostgresUserRepository(db)
 	categoryRepo := catalog.NewPostgresCategoryRepository(db)
+	subcategoryRepo := catalog.NewPostgresSubcategoryRepository(db)
 	productRepo := catalog.NewPostgresProductRepository(db)
 	storeRepo := catalog.NewPostgresStoreRepository(db)
 	orderRepo := orders.NewPostgresOrderRepository(db)
@@ -84,14 +85,14 @@ func main() {
 	// Инициализация сервисов
 	authService := auth.NewAuthService(authRepo, userRepo, cfg.JWT.Secret)
 	userService := users.NewUserService(userRepo)
-	catalogService := catalog.NewCatalogService(categoryRepo, productRepo, storeRepo)
+	catalogService := catalog.NewCatalogService(categoryRepo, subcategoryRepo, productRepo, storeRepo)
 	orderService := orders.NewOrderService(
 		orderRepo,
 		orderItemRepo,
 		productRepo,
 		deliveryRepo,
 		paymentRepo,
-		5.0,  // 5% сервисный сбор
+		5.0,   // 5% сервисный сбор
 		200.0, // 200 руб. стоимость доставки
 		telegramNotifier,
 		logger,
